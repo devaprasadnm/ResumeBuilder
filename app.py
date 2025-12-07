@@ -216,7 +216,8 @@ def generate_pdf():
     if p.get('location'): contact_info.append(p['location'])
     
     # Use multi_cell for contact info to prevent truncation
-    pdf.multi_cell(0, 6, ' | '.join(contact_info), 0, 'C')
+    pdf.set_x(10) # Ensure we start from left margin
+    pdf.multi_cell(190, 6, ' | '.join(contact_info), align='C')
     
     links = []
     if p.get('linkedin'): links.append(f"LinkedIn: {p['linkedin']}")
@@ -226,7 +227,8 @@ def generate_pdf():
     if links:
         pdf.set_font('Arial', '', 9) # Slightly smaller font for links
         # Use multi_cell to wrap long lines of links
-        pdf.multi_cell(0, 6, ' | '.join(links), 0, 'C')
+        pdf.set_x(10) # Ensure we start from left margin
+        pdf.multi_cell(190, 6, ' | '.join(links), align='C')
 
     # Reset Y to ensure content starts after the header background
     pdf.set_y(55)
