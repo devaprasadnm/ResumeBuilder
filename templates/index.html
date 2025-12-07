@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Builder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="header" style="position: relative;">
+            <h1>Resume Builder</h1>
+            <p class="header-subtitle">Create Your Professional Resume in Minutes</p>
+            <a href="{{ url_for('logout') }}" style="position: absolute; top: 20px; right: 20px; color: white; text-decoration: none; border: 1px solid white; padding: 5px 10px; border-radius: 5px; font-size: 0.9rem;">Logout</a>
+        </header>
+
+        <main class="main-content">
+            <!-- Control Buttons -->
+            <div class="control-buttons">
+                <button type="button" class="btn-autofill" onclick="autofillFromPDF()">📄 Auto-Fill from Saved Data</button>
+                <label class="btn-autofill" style="margin: 0; cursor: pointer;">
+                    📤 Upload & Extract PDF
+                    <input type="file" id="pdfUpload" accept=".pdf" style="display: none;" onchange="handlePDFUpload(event)">
+                </label>
+                <button type="button" class="btn-clear" onclick="clearAllFields()">🗑️ Clear All</button>
+            </div>
+
+            <form id="resumeForm">
+                <!-- Personal Information Section -->
+                <section class="form-section">
+                    <h2 class="section-title">👤 Personal Information</h2>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <input type="text" id="fullName" class="form-input" placeholder="Full Name" required>
+                        </div>
+                        <div class="form-group">
+                            <input type="email" id="email" class="form-input" placeholder="Email Address" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <input type="tel" id="phone" class="form-input" placeholder="Phone Number">
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="location" class="form-input" placeholder="City, Country">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <input type="url" id="linkedin" class="form-input" placeholder="LinkedIn Profile URL">
+                        </div>
+                        <div class="form-group">
+                            <input type="url" id="github" class="form-input" placeholder="GitHub Profile URL">
+                        </div>
+                    </div>
+                    <div class="form-row full">
+                        <div class="form-group">
+                            <input type="url" id="portfolio" class="form-input" placeholder="Portfolio Website URL">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Professional Summary Section -->
+                <section class="form-section">
+                    <h2 class="section-title">📝 Professional Summary</h2>
+                    <div class="form-group">
+                        <textarea id="summary" class="form-textarea" placeholder="Write a brief professional summary about yourself..."></textarea>
+                    </div>
+                </section>
+
+                <!-- Technical Skills Section -->
+                <section class="form-section">
+                    <h2 class="section-title">⚙️ Technical Skills</h2>
+                    <div id="skillsContainer">
+                        <div class="entry-item">
+                            <input type="text" class="form-input skill-category" placeholder="Skill Category (e.g., Languages)">
+                            <input type="text" class="form-input skill-items" placeholder="Skills (comma-separated)">
+                            <div class="button-container">
+                                <button type="button" class="remove-btn" onclick="removeSkill(this)">✕ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="add-btn" onclick="addSkill()">+ Add Skill</button>
+                </section>
+
+                <!-- Experience Section -->
+                <section class="form-section">
+                    <h2 class="section-title">💼 Professional Experience</h2>
+                    <div id="experienceContainer">
+                        <div class="entry-item">
+                            <input type="text" class="form-input exp-company" placeholder="Company Name">
+                            <input type="text" class="form-input exp-title" placeholder="Job Title">
+                            <div class="form-grid-2">
+                                <input type="text" class="form-input exp-location" placeholder="Location">
+                                <input type="text" class="form-input exp-start" placeholder="Start Date (e.g., Jan 2020)">
+                                <input type="text" class="form-input exp-end" placeholder="End Date (e.g., Dec 2021)">
+                            </div>
+                            <textarea class="form-textarea exp-description" placeholder="Responsibilities & Achievements (one per line)" rows="3"></textarea>
+                            <div class="button-container">
+                                <button type="button" class="remove-btn" onclick="removeExperience(this)">✕ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="add-btn" onclick="addExperience()">+ Add Experience</button>
+                </section>
+
+                <!-- Education Section -->
+                <section class="form-section">
+                    <h2 class="section-title">🎓 Education</h2>
+                    <div id="educationContainer">
+                        <div class="entry-item">
+                            <input type="text" class="form-input edu-degree" placeholder="Degree (e.g., Bachelor of Technology)">
+                            <input type="text" class="form-input edu-university" placeholder="University/Institution">
+                            <div class="form-grid-2">
+                                <input type="text" class="form-input edu-year" placeholder="Graduation Year (e.g., 2023)">
+                                <input type="text" class="form-input edu-cgpa" placeholder="CGPA/GPA">
+                            </div>
+                            <div class="button-container">
+                                <button type="button" class="remove-btn" onclick="removeEducation(this)">✕ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="add-btn" onclick="addEducation()">+ Add Education</button>
+                </section>
+
+                <!-- Projects Section -->
+                <section class="form-section">
+                    <h2 class="section-title">📦 Projects</h2>
+                    <div id="projectsContainer">
+                        <div class="entry-item">
+                            <input type="text" class="form-input proj-title" placeholder="Project Title">
+                            <textarea class="form-textarea proj-description" placeholder="Project Description" rows="3"></textarea>
+                            <input type="text" class="form-input proj-tech" placeholder="Tech Stack (comma-separated)">
+                            <div class="button-container">
+                                <button type="button" class="remove-btn" onclick="removeProject(this)">✕ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="add-btn" onclick="addProject()">+ Add Project</button>
+                </section>
+
+                <!-- Certifications Section -->
+                <section class="form-section">
+                    <h2 class="section-title">🏆 Certifications</h2>
+                    <div id="certificationsContainer">
+                        <div class="entry-item">
+                            <input type="text" class="form-input cert-name" placeholder="Certification/Workshop Name">
+                            <input type="text" class="form-input cert-org" placeholder="Issuing Organization">
+                            <input type="text" class="form-input cert-date" placeholder="Date (e.g., Jan 2023)">
+                            <div class="button-container">
+                                <button type="button" class="remove-btn" onclick="removeCertification(this)">✕ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="add-btn" onclick="addCertification()">+ Add Certification</button>
+                </section>
+
+                <!-- Submit Button -->
+                <button type="submit" class="btn-generate">📊 Generate Resume</button>
+            </form>
+
+            <!-- Resume Preview Section -->
+            <section class="preview-section">
+                <h2 class="preview-title">📋 Resume Preview</h2>
+                <div id="resumePreview"></div>
+                <button type="button" id="downloadBtn" class="btn-download hidden" onclick="downloadPDF()">📥 Download as PDF</button>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
