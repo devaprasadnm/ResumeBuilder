@@ -326,7 +326,18 @@ def generate_pdf():
             pdf.cell(0, 5, cert.get('organization', ''), 0, 1)
             pdf.ln(2)
 
-    response = make_response(pdf.output(dest='S').encode('latin-1'))
+    # Output PDF
+    try:
+        # Try fpdf2 style first (returns bytearray)
+        pdf_content = pdf.output()
+        if isinstance(pdf_content, str):
+            # Fallback for older fpdf (returns string)
+            pdf_content = pdf_content.encode('latin-1')
+    except TypeError:
+        # Fallback if arguments are required (older versions)
+        pdf_content = pdf.output(dest='S').encode('latin-1')
+
+    response = make_response(bytes(pdf_content))
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = 'attachment; filename=resume.pdf'
     return response
