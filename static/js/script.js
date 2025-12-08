@@ -1,4 +1,33 @@
 // ============================================
+// Toast Notification System
+// ============================================
+function showToast(message, type = 'info') {
+    let container = document.querySelector('.toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <span>${message}</span>
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;margin-left:1rem;font-size:1.2rem;">&times;</button>
+    `;
+
+    container.appendChild(toast);
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s ease-in';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// ============================================
 // Auto-Fill and Clear Functions
 // ============================================
 async function autofillFromPDF() {
@@ -7,26 +36,29 @@ async function autofillFromPDF() {
         const data = await response.json();
         
         // Check if we have meaningful data from the API
-        if (data.name && data.name !== 'N/A') {
-            // Auto-fill personal information
-            if (data.name) document.getElementById('fullName').value = data.name;
-            if (data.email) document.getElementById('email').value = data.email;
-            if (data.phone) document.getElementById('phone').value = data.phone;
-            if (data.location) document.getElementById('location').value = data.location;
-            if (data.linkedin) document.getElementById('linkedin').value = data.linkedin;
-            if (data.github) document.getElementById('github').value = data.github;
-            if (data.portfolio) document.getElementById('portfolio').value = data.portfolio;
-            
-            alert('✅ Resume data loaded! Please complete missing fields.');
-            saveFormData();
-        } else {
-            // If no data or only template data, load sample data instead
-            autoFillSampleData();
+        if (data && Object.keys(data).length > 0) {
+            if (data.personal) {
+                // Data is in the full saved format
+                populateFormData(data);
+                showToast('✅ Resume data loaded from cloud!', 'success');
+                saveFormData(); // Sync to local storage
+            } else if (data.name && data.name !== 'N/A') {
+                // Data is in the flat extracted format
+                document.getElementById('fullName').value = data.name || '';
+                document.getElementById('email').value = data.email || '';
+                document.getElementById('phone').value = data.phone || '';
+                document.getElementById('location').value = data.location || '';
+                document.getElementById('linkedin').value = data.linkedin || '';
+                document.getElementById('github').value = data.github || '';
+                document.getElementById('portfolio').value = data.portfolio || '';
+                
+                showToast('✅ Resume data loaded! Please complete missing fields.', 'success');
+                saveFormData();
+            }
         }
     } catch (error) {
         console.error('Error loading resume data:', error);
-        // Load sample data as fallback
-        autoFillSampleData();
+        showToast('Error loading resume data', 'error');
     }
 }
 
@@ -37,7 +69,7 @@ async function handlePDFUpload(event) {
 
     // Check if file is PDF
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-        alert('⚠️ Please upload a PDF file.');
+        showToast('⚠️ Please upload a PDF file.', 'warning');
         return;
     }
 
@@ -67,187 +99,18 @@ async function handlePDFUpload(event) {
         if (data.portfolio) document.getElementById('portfolio').value = data.portfolio;
         if (data.summary) document.getElementById('summary').value = data.summary;
 
-        alert('✅ PDF extracted successfully! Form fields populated.');
+        showToast('✅ PDF extracted successfully! Form fields populated.', 'success');
         
         // Reset the file input so same file can be selected again
         document.getElementById('pdfUpload').value = '';
         saveFormData();
     } catch (error) {
         console.error('Error uploading PDF:', error);
-        alert('❌ Error extracting PDF. Please ensure it\'s a valid resume PDF.');
+        showToast('❌ Error extracting PDF. Please ensure it\'s a valid resume PDF.', 'error');
         document.getElementById('pdfUpload').value = '';
     }
 }
 
-// Auto-fill with sample data from screenshots
-function autoFillSampleData() {
-    // Personal Information
-    document.getElementById('fullName').value = 'Devaprasad N M';
-    document.getElementById('email').value = 'devaprasadnm@gmail.com';
-    document.getElementById('phone').value = '+91-9019956637';
-    document.getElementById('location').value = 'Kannur, Kerala';
-    document.getElementById('linkedin').value = 'https://www.linkedin.com/in/devaprasad-n-m/';
-    document.getElementById('github').value = 'https://github.com/devaprasadnm';
-    document.getElementById('portfolio').value = 'https://devaprasadnm.vercel.app/';
-    
-    // Professional Summary
-    document.getElementById('summary').value = 'Backend Developer with 2+ years of experience in designing and optimizing Spring Boot microservices, REST APIs, and MySQL databases. Skilled in integrating backend systems with React/Angular frontends and implementing security best practices. Adept at Agile delivery, with proven success in improving system performance and scalability.';
-    
-    // Clear existing skills and add new ones
-    const skillsContainer = document.getElementById('skillsContainer');
-    skillsContainer.innerHTML = '';
-    
-    const skillsData = [
-        { category: 'Programming Languages', items: 'Java, Python, JavaScript, HTML, CSS, C' },
-        { category: 'Frameworks & Libraries', items: 'Spring Boot, React, Angular, Django' },
-        { category: 'Databases', items: 'MySQL (optimization), MongoDB' },
-        { category: 'Tools & IDEs', items: 'Git, Postman, IntelliJ, Eclipse, Maven' },
-        { category: 'Backend Expertise', items: 'REST API design, Microservices architecture, Backend integration, JWT/OAuth2 Security' },
-        { category: 'Development Practices', items: 'Agile (Scrum), Code review processes, Problem solving' }
-    ];
-    
-    skillsData.forEach(skill => {
-        const skillItem = document.createElement('div');
-        skillItem.className = 'entry-item';
-        skillItem.innerHTML = `
-            <input type="text" class="form-input skill-category" placeholder="Skill Category" value="${skill.category}">
-            <input type="text" class="form-input skill-items" placeholder="Skills (comma-separated)" value="${skill.items}">
-            <div class="button-container">
-                <button type="button" class="remove-btn" onclick="removeSkill(this)">✕ Remove</button>
-            </div>
-        `;
-        skillsContainer.appendChild(skillItem);
-    });
-    
-    // Clear and add experience
-    const expContainer = document.getElementById('experienceContainer');
-    expContainer.innerHTML = '';
-    
-    const experienceData = [
-        {
-            title: 'Developer',
-            company: 'Tata Consultancy Services (TCS)',
-            location: 'Kochi, India',
-            startDate: 'Jan 2023',
-            endDate: 'Present',
-            description: 'Built and optimized Spring Boot microservices in Java for enterprise-grade systems, improving API response times by 25% and handling 10K+ daily API requests.\nDesigned and deployed secure REST APIs with JWT/OAuth2 authentication, reducing unauthorized access incidents by 30%.\nIntegrated backend services with React and Angular applications, ensuring seamless data flow and reducing frontend-backend defects by 20%.\nEnhanced MySQL database performance with query optimization and indexing, cutting query execution times by 40%.\nDelivered 100% of sprint commitments in Agile teams through active participation in sprint planning, daily stand-ups, and retrospectives.'
-        },
-        {
-            title: 'Intern',
-            company: 'Tata Consultancy Services (TCS)',
-            location: 'Kochi, India',
-            startDate: 'Jul 2022',
-            endDate: 'Dec 2022',
-            description: 'Developed backend modules in Java + Spring Boot, gaining hands-on experience in microservices architecture.\nBuilt and tested REST API endpoints for CRUD operations, improving data retrieval efficiency by 15%.\nAssisted in frontend integration with Angular, reducing API call failures by 10%.\nParticipated in code reviews, testing, and documentation, ensuring 95% defect-free delivery in assigned modules.'
-        }
-    ];
-    
-    experienceData.forEach(exp => {
-        const expItem = document.createElement('div');
-        expItem.className = 'entry-item';
-        expItem.innerHTML = `
-            <input type="text" class="form-input exp-company" placeholder="Company Name" value="${exp.company}">
-            <input type="text" class="form-input exp-title" placeholder="Job Title" value="${exp.title}">
-            <div class="form-grid-2">
-                <input type="text" class="form-input exp-location" placeholder="Location" value="${exp.location}">
-                <input type="text" class="form-input exp-start" placeholder="Start Date" value="${exp.startDate}">
-                <input type="text" class="form-input exp-end" placeholder="End Date" value="${exp.endDate}">
-            </div>
-            <textarea class="form-textarea exp-description" placeholder="Responsibilities & Achievements">${exp.description}</textarea>
-            <div class="button-container">
-                <button type="button" class="remove-btn" onclick="removeExperience(this)">✕ Remove</button>
-            </div>
-        `;
-        expContainer.appendChild(expItem);
-    });
-    
-    // Clear and add education
-    const eduContainer = document.getElementById('educationContainer');
-    eduContainer.innerHTML = '';
-    
-    const eduData = {
-        degree: 'B.E. in Computer Science',
-        university: 'Cochin University of Science and Technology (CUSAT)',
-        year: '2019 – 2023',
-        cgpa: '9.01/10'
-    };
-    
-    const eduItem = document.createElement('div');
-    eduItem.className = 'entry-item';
-    eduItem.innerHTML = `
-        <input type="text" class="form-input edu-degree" placeholder="Degree" value="${eduData.degree}">
-        <input type="text" class="form-input edu-university" placeholder="University/Institution" value="${eduData.university}">
-        <div class="form-grid-2">
-            <input type="text" class="form-input edu-year" placeholder="Graduation Year" value="${eduData.year}">
-            <input type="text" class="form-input edu-cgpa" placeholder="CGPA/GPA" value="${eduData.cgpa}">
-        </div>
-        <div class="button-container">
-            <button type="button" class="remove-btn" onclick="removeEducation(this)">✕ Remove</button>
-        </div>
-    `;
-    eduContainer.appendChild(eduItem);
-    
-    // Clear and add projects
-    const projContainer = document.getElementById('projectsContainer');
-    projContainer.innerHTML = '';
-    
-    const projectsData = [
-        {
-            title: 'Automatic Helmet Detection',
-            description: 'Object detection model using YOLO + OpenCV for traffic safety.'
-        },
-        {
-            title: 'Student Management System',
-            description: 'Django-based web app deployed at ICREP, CUSAT.'
-        },
-        {
-            title: 'Blood Bank Web App',
-            description: 'Django + Bootstrap platform to manage emergency blood donor database.'
-        }
-    ];
-    
-    projectsData.forEach(proj => {
-        const projItem = document.createElement('div');
-        projItem.className = 'entry-item';
-        projItem.innerHTML = `
-            <input type="text" class="form-input proj-title" placeholder="Project Title" value="${proj.title}">
-            <textarea class="form-textarea proj-description" placeholder="Project Description">${proj.description}</textarea>
-            <input type="text" class="form-input proj-tech" placeholder="Tech Stack">
-            <div class="button-container">
-                <button type="button" class="remove-btn" onclick="removeProject(this)">✕ Remove</button>
-            </div>
-        `;
-        projContainer.appendChild(projItem);
-    });
-    
-    // Clear and add certifications
-    const certContainer = document.getElementById('certificationsContainer');
-    certContainer.innerHTML = '';
-    
-    const certificationsData = [
-        { name: 'Architecting with Google Compute Engine', org: 'Coursera' },
-        { name: 'What is Data Science', org: 'IBM' },
-        { name: 'Spoken Tutorial (Python)', org: 'IIT Bombay' },
-        { name: 'Computer Vision Workshop', org: 'Shape AI (Microsoft & AWS)' }
-    ];
-    
-    certificationsData.forEach(cert => {
-        const certItem = document.createElement('div');
-        certItem.className = 'entry-item';
-        certItem.innerHTML = `
-            <input type="text" class="form-input cert-name" placeholder="Certification Name" value="${cert.name}">
-            <input type="text" class="form-input cert-org" placeholder="Organization" value="${cert.org}">
-            <input type="text" class="form-input cert-date" placeholder="Date">
-            <div class="button-container">
-                <button type="button" class="remove-btn" onclick="removeCertification(this)">✕ Remove</button>
-            </div>
-        `;
-        certContainer.appendChild(certItem);
-    });
-    
-    saveFormData();
-    alert('✅ Sample data loaded! You can now generate and download your resume.');
-}
 
 function clearAllFields() {
     if (!confirm('Are you sure you want to clear all fields? This cannot be undone.')) {
@@ -334,7 +197,7 @@ function addSkill() {
         const category = lastEntry.querySelector('.skill-category')?.value.trim();
         const items = lastEntry.querySelector('.skill-items')?.value.trim();
         if (!category || !items) {
-            alert('⚠️ Please fill in the current skill entry before adding another.');
+            showToast('⚠️ Please fill in the current skill entry before adding another.', 'warning');
             return;
         }
     }
@@ -364,7 +227,7 @@ function addExperience() {
         const title = lastEntry.querySelector('.exp-title')?.value.trim();
         const startDate = lastEntry.querySelector('.exp-start')?.value.trim();
         if (!company || !title || !startDate) {
-            alert('⚠️ Please complete the current experience entry before adding another.');
+            showToast('⚠️ Please complete the current experience entry before adding another.', 'warning');
             return;
         }
     }
@@ -400,7 +263,7 @@ function addEducation() {
         const university = lastEntry.querySelector('.edu-university')?.value.trim();
         const year = lastEntry.querySelector('.edu-year')?.value.trim();
         if (!degree || !university || !year) {
-            alert('⚠️ Please complete the current education entry before adding another.');
+            showToast('⚠️ Please complete the current education entry before adding another.', 'warning');
             return;
         }
     }
@@ -433,7 +296,7 @@ function addProject() {
         const title = lastEntry.querySelector('.proj-title')?.value.trim();
         const description = lastEntry.querySelector('.proj-description')?.value.trim();
         if (!title || !description) {
-            alert('⚠️ Please complete the current project entry before adding another.');
+            showToast('⚠️ Please complete the current project entry before adding another.', 'warning');
             return;
         }
     }
@@ -463,7 +326,7 @@ function addCertification() {
         const name = lastEntry.querySelector('.cert-name')?.value.trim();
         const organization = lastEntry.querySelector('.cert-org')?.value.trim();
         if (!name || !organization) {
-            alert('⚠️ Please complete the current certification entry before adding another.');
+            showToast('⚠️ Please complete the current certification entry before adding another.', 'warning');
             return;
         }
     }
@@ -541,10 +404,10 @@ function collectFormData() {
     // Collect education
     document.querySelectorAll('#educationContainer .entry-item').forEach(item => {
         const edu = {
-            degree: item.querySelector('.edu-degree').value,
-            university: item.querySelector('.edu-university').value,
-            year: item.querySelector('.edu-year').value,
-            cgpa: item.querySelector('.edu-cgpa').value
+            degree: item.querySelector('.edu-degree')?.value || '',
+            university: item.querySelector('.edu-university')?.value || '',
+            year: item.querySelector('.edu-year')?.value || '',
+            cgpa: item.querySelector('.edu-cgpa')?.value || ''
         };
         if (edu.degree || edu.university) {
             data.education.push(edu);
@@ -582,7 +445,7 @@ function generateResume() {
     const data = collectFormData();
 
     if (!data.personal.fullName || !data.personal.email) {
-        alert('Please fill in at least Name and Email!');
+        showToast('Please fill in at least Name and Email!', 'error');
         return;
     }
 
@@ -602,110 +465,131 @@ function generateResume() {
 function renderResumeTemplate(data) {
     const { personal, summary, skills, experience, education, projects, certifications } = data;
 
-    let html = ``;
+    // Colors matching PDF
+    const colors = {
+        primary: '#1B3C53',
+        secondary: '#234C6A',
+        accent: '#456882',
+        text: '#323232',
+        lightText: '#646464',
+        white: '#FFFFFF'
+    };
 
-    // Header with Name
-    html += `<div style="text-align: center; margin-bottom: 15px;">
-        <div style="font-size: 28px; font-weight: bold; color: #1B3C53; margin-bottom: 8px;">${escapeHtml(personal.fullName)}</div>
-    </div>`;
+    let html = `<div style="font-family: Arial, sans-serif; color: ${colors.text}; line-height: 1.5;">`;
+
+    // Header Section (Matching PDF: Dark background, white text)
+    html += `<div style="background-color: ${colors.primary}; color: ${colors.white}; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 5px 5px 0 0;">
+        <div style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">${escapeHtml(personal.fullName || 'Your Name')}</div>`;
 
     // Contact Information
     let contactParts = [];
-    if (personal.email) contactParts.push(`<a href="mailto:${personal.email}" style="color: #234C6A; text-decoration: none;">${escapeHtml(personal.email)}</a>`);
+    if (personal.email) contactParts.push(escapeHtml(personal.email));
     if (personal.phone) contactParts.push(escapeHtml(personal.phone));
     if (personal.location) contactParts.push(escapeHtml(personal.location));
-    if (personal.linkedin) contactParts.push(`<a href="${personal.linkedin}" style="color: #234C6A; text-decoration: none;">LinkedIn</a>`);
-    if (personal.github) contactParts.push(`<a href="${personal.github}" style="color: #234C6A; text-decoration: none;">GitHub</a>`);
-    if (personal.portfolio) contactParts.push(`<a href="${personal.portfolio}" style="color: #234C6A; text-decoration: none;">Portfolio</a>`);
-
+    
     if (contactParts.length > 0) {
-        html += `<div style="text-align: center; font-size: 13px; margin-bottom: 15px; color: #234C6A;">
-            ${contactParts.join(' • ')}
-        </div>`;
+        html += `<div style="font-size: 14px; margin-bottom: 8px;">${contactParts.join(' | ')}</div>`;
     }
+
+    // Links
+    let linkParts = [];
+    if (personal.linkedin) linkParts.push(`LinkedIn: ${escapeHtml(personal.linkedin)}`);
+    if (personal.github) linkParts.push(`GitHub: ${escapeHtml(personal.github)}`);
+    if (personal.portfolio) linkParts.push(`Portfolio: ${escapeHtml(personal.portfolio)}`);
+
+    if (linkParts.length > 0) {
+        html += `<div style="font-size: 12px;">${linkParts.join(' | ')}</div>`;
+    }
+    
+    html += `</div>`; // End Header
+
+    // Helper for Section Title
+    const sectionTitle = (title) => `
+        <div style="margin-top: 15px; margin-bottom: 10px; border-bottom: 1px solid ${colors.accent}; padding-bottom: 5px;">
+            <span style="font-size: 16px; font-weight: bold; color: ${colors.secondary}; text-transform: uppercase;">${title}</span>
+        </div>`;
 
     // Professional Summary
     if (summary) {
-        html += `<div style="margin-bottom: 15px;">
-            <div style="font-size: 14px; font-weight: bold; color: #234C6A; margin-bottom: 6px;">Summary</div>
-            <div style="font-size: 12px; line-height: 1.6; color: #1B3C53;">${escapeHtml(summary)}</div>
-        </div>`;
+        html += sectionTitle('Professional Summary');
+        html += `<div style="font-size: 14px; margin-bottom: 15px;">${escapeHtml(summary)}</div>`;
     }
 
-    // Professional Experience
-    if (experience.length > 0) {
-        html += `<div style="margin-bottom: 15px;">
-            <div style="font-size: 14px; font-weight: bold; color: #234C6A; margin-bottom: 8px;">Professional Experience</div>`;
+    // Skills
+    if (skills && skills.length > 0) {
+        html += sectionTitle('Skills');
+        skills.forEach(skill => {
+            if (skill.category && skill.items) {
+                html += `<div style="margin-bottom: 5px; font-size: 14px;">
+                    <span style="font-weight: bold; color: ${colors.secondary};">${escapeHtml(skill.category)}:</span> 
+                    <span>${escapeHtml(skill.items)}</span>
+                </div>`;
+            }
+        });
+    }
+
+    // Experience
+    if (experience && experience.length > 0) {
+        html += sectionTitle('Experience');
         experience.forEach(exp => {
-            html += `<div style="margin-bottom: 10px;">
-                <div style="font-weight: bold; color: #1B3C53;">${escapeHtml(exp.title)}</div>
-                <div style="color: #234C6A; font-size: 12px;">${escapeHtml(exp.company)}${exp.location ? ' — ' + escapeHtml(exp.location) : ''}</div>
-                <div style="color: rgba(27, 60, 83, 0.75); font-size: 11px; margin-bottom: 4px;">${escapeHtml(exp.startDate)}${exp.endDate ? ' - ' + escapeHtml(exp.endDate) : ''}</div>`;
+            html += `<div style="margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div style="font-size: 15px; font-weight: bold; color: ${colors.primary};">${escapeHtml(exp.title)}</div>
+                    <div style="font-size: 13px; font-style: italic; color: ${colors.lightText};">${escapeHtml(exp.startDate)} - ${escapeHtml(exp.endDate)}</div>
+                </div>
+                <div style="font-size: 14px; font-weight: bold; color: ${colors.secondary}; margin-bottom: 5px;">
+                    ${escapeHtml(exp.company)} | ${escapeHtml(exp.location)}
+                </div>`;
+            
             if (exp.description) {
-                const points = exp.description.split('\n').filter(p => p.trim());
-                html += `<ul style="margin: 4px 0; padding-left: 20px; font-size: 12px; color: #1B3C53;">`;
-                points.forEach(point => {
-                    html += `<li style="margin: 2px 0;">${escapeHtml(point.trim())}</li>`;
-                });
-                html += `</ul>`;
+                html += `<div style="font-size: 13px; white-space: pre-line;">${escapeHtml(exp.description)}</div>`;
             }
             html += `</div>`;
         });
-        html += `</div>`;
     }
 
     // Education
-    if (education.length > 0) {
-        html += `<div style="margin-bottom: 15px;">
-            <div style="font-size: 14px; font-weight: bold; color: #234C6A; margin-bottom: 8px;">Education</div>`;
+    if (education && education.length > 0) {
+        html += sectionTitle('Education');
         education.forEach(edu => {
-            html += `<div style="margin-bottom: 8px;">
-                <div style="font-weight: bold; color: #1B3C53;">${escapeHtml(edu.degree)}${edu.university ? ' — ' + escapeHtml(edu.university) : ''}</div>
-                <div style="color: rgba(27, 60, 83, 0.8); font-size: 12px;">${escapeHtml(edu.year)}${edu.cgpa ? ' | CGPA: ' + escapeHtml(edu.cgpa) : ''}</div>
+            html += `<div style="margin-bottom: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div style="font-size: 15px; font-weight: bold; color: ${colors.primary};">${escapeHtml(edu.degree)}</div>
+                    <div style="font-size: 13px; font-style: italic; color: ${colors.lightText};">${escapeHtml(edu.year)}</div>
+                </div>
+                <div style="font-size: 14px; color: ${colors.secondary};">${escapeHtml(edu.university)}</div>
+                ${edu.cgpa ? `<div style="font-size: 13px; font-style: italic;">CGPA/GPA: ${escapeHtml(edu.cgpa)}</div>` : ''}
             </div>`;
         });
-        html += `</div>`;
-    }
-
-    // Technical Skills
-    if (skills.length > 0) {
-        html += `<div style="margin-bottom: 15px;">
-            <div style="font-size: 14px; font-weight: bold; color: #234C6A; margin-bottom: 8px;">Technical Skills</div>`;
-        skills.forEach(skill => {
-            html += `<div style="margin-bottom: 6px; font-size: 12px; color: #1B3C53;">
-                <strong style="color: #234C6A;">${escapeHtml(skill.category)}:</strong>
-                <span style="color: #1B3C53;"> ${escapeHtml(skill.items)}</span>
-            </div>`;
-        });
-        html += `</div>`;
     }
 
     // Projects
-    if (projects.length > 0) {
-        html += `<div style="margin-bottom: 15px;">
-            <div style="font-size: 14px; font-weight: bold; color: #234C6A; margin-bottom: 8px;">Projects</div>
-            <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #1B3C53;">`;
+    if (projects && projects.length > 0) {
+        html += sectionTitle('Projects');
         projects.forEach(proj => {
-            let projText = escapeHtml(proj.title);
-            if (proj.description) {
-                projText += ' — ' + escapeHtml(proj.description);
-            }
-            html += `<li style="margin: 3px 0;">${projText}</li>`;
+            html += `<div style="margin-bottom: 15px;">
+                <div style="font-size: 15px; font-weight: bold; color: ${colors.primary}; margin-bottom: 2px;">${escapeHtml(proj.title)}</div>
+                ${proj.techStack ? `<div style="font-size: 13px; font-style: italic; color: ${colors.accent}; margin-bottom: 4px;">Tech Stack: ${escapeHtml(proj.techStack)}</div>` : ''}
+                ${proj.description ? `<div style="font-size: 13px;">${escapeHtml(proj.description)}</div>` : ''}
+            </div>`;
         });
-        html += `</ul></div>`;
     }
 
     // Certifications
-    if (certifications.length > 0) {
-        html += `<div style="margin-bottom: 15px;">
-            <div style="font-size: 14px; font-weight: bold; color: #234C6A; margin-bottom: 8px;">Certifications</div>
-            <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #1B3C53;">`;
+    if (certifications && certifications.length > 0) {
+        html += sectionTitle('Certifications');
         certifications.forEach(cert => {
-            html += `<li style="margin: 3px 0;">${escapeHtml(cert.name)}${cert.organization ? ' — ' + escapeHtml(cert.organization) : ''}</li>`;
+            html += `<div style="margin-bottom: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div style="font-size: 14px; font-weight: bold; color: ${colors.primary};">${escapeHtml(cert.name)}</div>
+                    <div style="font-size: 13px; font-style: italic; color: ${colors.lightText};">${escapeHtml(cert.date)}</div>
+                </div>
+                <div style="font-size: 13px; color: ${colors.secondary};">${escapeHtml(cert.organization)}</div>
+            </div>`;
         });
-        html += `</ul></div>`;
     }
 
+    html += `</div>`; // End Main Container
     return html;
 }
 
@@ -746,8 +630,8 @@ window.onclick = function(event) {
 function downloadPDF() {
     const data = collectFormData();
     const btn = document.getElementById('downloadBtn');
-    const originalText = btn.innerText;
-    btn.innerText = '⏳ Generating PDF...';
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '⏳ Generating PDF...';
     btn.disabled = true;
 
     fetch('/generate-pdf', {
@@ -757,11 +641,18 @@ function downloadPDF() {
         },
         body: JSON.stringify(data)
     })
-    .then(response => {
+    .then(async response => {
+        if (response.headers.get('content-type')?.includes('application/json')) {
+            const err = await response.json();
+            throw new Error(err.error || 'Server error');
+        }
         if (!response.ok) throw new Error('Network response was not ok');
         return response.blob();
     })
     .then(blob => {
+        if (blob.size === 0) {
+            throw new Error('Generated PDF is empty');
+        }
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.style.display = 'none';
@@ -771,13 +662,13 @@ function downloadPDF() {
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
-        btn.innerText = originalText;
+        btn.innerHTML = originalContent;
         btn.disabled = false;
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Failed to generate PDF. Please try again.');
-        btn.innerText = originalText;
+        showToast(error.message || 'Failed to generate PDF. Please try again.', 'error');
+        btn.innerHTML = originalContent;
         btn.disabled = false;
     });
 }
@@ -789,15 +680,81 @@ function downloadPDF() {
 // Save form data to localStorage periodically
 function saveFormData() {
     const data = collectFormData();
-    localStorage.setItem('resumeFormData', JSON.stringify(data));
+    // Attach ownership to the data
+    const storageData = {
+        owner: window.currentUserEmail,
+        content: data
+    };
+    localStorage.setItem('resumeFormData', JSON.stringify(storageData));
+    saveToCloud(data);
+}
+
+let saveTimeout;
+function saveToCloud(data) {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+        fetch('/api/save-resume', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        }).then(response => {
+            if (response.ok) {
+                console.log('Saved to cloud');
+            }
+        }).catch(err => console.error('Error saving to cloud', err));
+    }, 2000);
 }
 
 // Load form data from localStorage
 function loadFormData() {
+    // Check if we have server-side data injected into the page
+    // This is the most reliable source for the logged-in user
+    if (window.serverResumeData && Object.keys(window.serverResumeData).length > 0) {
+        console.log('Loading data from server...');
+        populateFormData(window.serverResumeData);
+        // Update local storage to match server data
+        const storageData = {
+            owner: window.currentUserEmail,
+            content: window.serverResumeData
+        };
+        localStorage.setItem('resumeFormData', JSON.stringify(storageData));
+        return;
+    }
+
+    // Fallback to local storage if no server data
     const saved = localStorage.getItem('resumeFormData');
     if (saved) {
-        const data = JSON.parse(saved);
-        populateFormData(data);
+        try {
+            const parsed = JSON.parse(saved);
+            
+            // Check if the saved data belongs to the current user
+            // Handle both old format (direct data) and new format (wrapped with owner)
+            let dataToLoad = null;
+
+            if (parsed.owner && parsed.content) {
+                // New format
+                if (parsed.owner === window.currentUserEmail) {
+                    dataToLoad = parsed.content;
+                } else {
+                    console.log('Ignoring local storage data from different user:', parsed.owner);
+                    localStorage.removeItem('resumeFormData'); // Clear mismatching data
+                }
+            } else {
+                // Old format (no owner) - risky, but we can try to infer or just clear it
+                console.log('Clearing legacy local storage data without owner info');
+                localStorage.removeItem('resumeFormData');
+            }
+
+            if (dataToLoad) {
+                populateFormData(dataToLoad);
+                showToast('Restored unsaved changes from local storage', 'info');
+            }
+        } catch (e) {
+            console.error('Error parsing local storage:', e);
+            localStorage.removeItem('resumeFormData');
+        }
     }
 }
 

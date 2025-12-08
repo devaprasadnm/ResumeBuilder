@@ -37,7 +37,7 @@ ResumeBuilder/
 │   │   └── style.css           # Modern responsive styling
 │   └── js/
 │       └── script.js           # Form logic & PDF export
-└── Devaprasad_Resume_Updated.pdf  # Sample resume reference
+
 ```
 
 ---

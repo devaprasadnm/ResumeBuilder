@@ -119,7 +119,7 @@ ResumeBuilder/
 │   │   └── style.css              # Modern & responsive styling
 │   └── js/
 │       └── script.js              # Form handling & PDF export
-└── Devaprasad_Resume_Updated.pdf   # Sample resume template reference
+
 ```
 
 ## 🎨 Design Features

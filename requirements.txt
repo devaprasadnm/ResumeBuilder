@@ -1,3 +1,5 @@
 Flask
 fpdf2
 PyPDF2
+supabase
+python-dotenv

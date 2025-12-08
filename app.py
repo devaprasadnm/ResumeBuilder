@@ -3,6 +3,10 @@ import os
 import json
 from functools import wraps
 from fpdf import FPDF
+from supabase import create_client, Client, ClientOptions
+from dotenv import load_dotenv
+
+load_dotenv()
 
 try:
     from PyPDF2 import PdfReader
@@ -10,58 +14,152 @@ except ImportError:
     PdfReader = None
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here_change_this_in_production' # Required for session
+app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key_here_change_this_in_production')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-# Hardcoded credentials
-ADMIN_EMAIL = "devaprasadmohan@gmail.com"
-ADMIN_PASSWORD = "854719"
+# Supabase Setup
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    supabase = None
+    print("Warning: Supabase credentials not found. Auth and storage will not work.")
+
+def get_supabase():
+    """Get a Supabase client authenticated with the user's token if available."""
+    token = session.get('access_token')
+    if token and SUPABASE_URL and SUPABASE_KEY:
+        return create_client(
+            SUPABASE_URL, 
+            SUPABASE_KEY, 
+            options=ClientOptions(headers={"Authorization": f"Bearer {token}"})
+        )
+    return supabase
 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'logged_in' not in session:
+        if 'user' not in session:
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
-# Load resume data from PDF extraction
-resume_data = {}
-try:
-    if os.path.exists('resume_data.json'):
-        with open('resume_data.json', 'r') as f:
-            resume_data = json.load(f)
-except:
-    pass
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        
+        if not supabase:
+            flash("Supabase not configured.")
+            return render_template('signup.html')
+
+        try:
+            response = supabase.auth.sign_up({"email": email, "password": password})
+            if response.user:
+                flash("Signup successful! Please check your email to confirm, or login if auto-confirmed.", "success")
+                return redirect(url_for('login'))
+            else:
+                flash("Signup failed.", "error")
+        except Exception as e:
+            flash(str(e), "error")
+            
+    return render_template('signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        
-        if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
-            session['logged_in'] = True
-            return redirect(url_for('index'))
-        else:
-            flash('Invalid email or password')
+
+        if not supabase:
+            flash("Supabase not configured.", "error")
+            return render_template('login.html')
+
+        try:
+            response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            if response.user:
+                session['user'] = response.user.id
+                session['access_token'] = response.session.access_token
+                session['email'] = response.user.email
+                return redirect(url_for('index'))
+        except Exception as e:
+            flash(str(e), "error")
             
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
-    session.pop('logged_in', None)
+    session.clear()
+    if supabase:
+        try:
+            supabase.auth.sign_out()
+        except:
+            pass
     return redirect(url_for('login'))
 
 @app.route('/')
 @login_required
 def index():
+    # Fetch user data from Supabase
+    user_id = session.get('user')
+    resume_data = {}
+    db = get_supabase()
+    
+    if db and user_id:
+        try:
+            response = db.table('resumes').select('data').eq('user_id', user_id).execute()
+            if response.data and len(response.data) > 0:
+                resume_data = response.data[0]['data']
+        except Exception as e:
+            print(f"Error fetching resume: {e}")
+
     return render_template('index.html', resume_data=resume_data)
+
+@app.route('/api/save-resume', methods=['POST'])
+@login_required
+def save_resume():
+    user_id = session.get('user')
+    data = request.json
+    db = get_supabase()
+    
+    if not db or not user_id:
+        return jsonify({'error': 'Database not connected'}), 500
+
+    try:
+        # Check if record exists
+        existing = db.table('resumes').select('id').eq('user_id', user_id).execute()
+        
+        if existing.data and len(existing.data) > 0:
+            # Update
+            db.table('resumes').update({'data': data, 'updated_at': 'now()'}).eq('user_id', user_id).execute()
+        else:
+            # Insert
+            db.table('resumes').insert({'user_id': user_id, 'data': data}).execute()
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error saving resume: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/resume-data')
 @login_required
 def get_resume_data():
+    # This endpoint might be redundant if we pass data in index(), but keeping for compatibility
+    user_id = session.get('user')
+    resume_data = {}
+    db = get_supabase()
+    if db and user_id:
+        try:
+            response = db.table('resumes').select('data').eq('user_id', user_id).execute()
+            if response.data:
+                resume_data = response.data[0]['data']
+        except:
+            pass
     return jsonify(resume_data)
+
 
 @app.route('/upload-pdf', methods=['POST'])
 @login_required
@@ -92,16 +190,9 @@ def upload_pdf():
         # Parse the extracted text to find contact information
         extracted_data = parse_resume_text(text)
 
-        # Cache the extracted data so it can be reused by the auto-fill endpoint
-        global resume_data
-        resume_data.update({key: value for key, value in extracted_data.items() if value})
-
-        try:
-            with open('resume_data.json', 'w', encoding='utf-8') as handle:
-                json.dump(resume_data, handle, ensure_ascii=False, indent=2)
-        except OSError as exc:  # Persisting is best effort
-            app.logger.warning('Unable to persist resume data: %s', exc)
-
+        # Do not use global state or file system for user data
+        # Just return the extracted data to the frontend
+        
         return jsonify(extracted_data)
     
     except Exception as e:
@@ -160,6 +251,36 @@ def parse_resume_text(text):
     
     return data
 
+def sanitize_text(text):
+    if not text:
+        return ""
+    replacements = {
+        '\u2013': '-',
+        '\u2014': '--',
+        '\u2018': "'",
+        '\u2019': "'",
+        '\u201c': '"',
+        '\u201d': '"',
+        '\u2022': '*',
+        '\u2026': '...',
+        '\u00a0': ' '
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
+    
+    # Final safety net: encode to latin-1, replacing errors with '?'
+    return text.encode('latin-1', 'replace').decode('latin-1')
+
+def recursive_sanitize(obj):
+    if isinstance(obj, dict):
+        return {k: recursive_sanitize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [recursive_sanitize(i) for i in obj]
+    elif isinstance(obj, str):
+        return sanitize_text(obj)
+    else:
+        return obj
+
 class PDF(FPDF):
     def header(self):
         pass  # We'll handle the header manually in the body to control data
@@ -188,161 +309,171 @@ class PDF(FPDF):
 @app.route('/generate-pdf', methods=['POST'])
 @login_required
 def generate_pdf():
-    data = request.json
-    pdf = PDF()
-    pdf.alias_nb_pages()
-    pdf.add_page()
-    
-    # Colors
-    primary_color = (27, 60, 83)
-    secondary_color = (35, 76, 106)
-    accent_color = (69, 104, 130)
+    try:
+        data = request.json
+        # Sanitize data to prevent UnicodeEncodeError
+        data = recursive_sanitize(data)
+        
+        pdf = PDF()
+        pdf.alias_nb_pages()
+        pdf.add_page()
+        
+        # Colors
+        primary_color = (27, 60, 83)
+        secondary_color = (35, 76, 106)
+        accent_color = (69, 104, 130)
 
-    # Header Section
-    pdf.set_fill_color(*primary_color)
-    # Draw a larger rectangle to accommodate potential wrapping
-    pdf.rect(0, 0, 210, 50, 'F')
-    
-    pdf.set_y(10)
-    pdf.set_font('Arial', 'B', 24)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 10, data.get('personal', {}).get('fullName', 'Your Name'), 0, 1, 'C')
-    
-    pdf.set_font('Arial', '', 10)
-    contact_info = []
-    p = data.get('personal', {})
-    if p.get('email'): contact_info.append(p['email'])
-    if p.get('phone'): contact_info.append(p['phone'])
-    if p.get('location'): contact_info.append(p['location'])
-    
-    # Use multi_cell for contact info to prevent truncation
-    pdf.set_x(10) # Ensure we start from left margin
-    pdf.multi_cell(190, 6, ' | '.join(contact_info), align='C')
-    
-    links = []
-    if p.get('linkedin'): links.append(f"LinkedIn: {p['linkedin']}")
-    if p.get('github'): links.append(f"GitHub: {p['github']}")
-    if p.get('portfolio'): links.append(f"Portfolio: {p['portfolio']}")
-    
-    if links:
-        pdf.set_font('Arial', '', 9) # Slightly smaller font for links
-        # Use multi_cell to wrap long lines of links
-        pdf.set_x(10) # Ensure we start from left margin
-        pdf.multi_cell(190, 6, ' | '.join(links), align='C')
-
-    # Reset Y to ensure content starts after the header background
-    pdf.set_y(55)
-
-    # Summary
-    if data.get('summary'):
-        pdf.section_title('Professional Summary')
+        # Header Section
+        pdf.set_fill_color(*primary_color)
+        # Draw a larger rectangle to accommodate potential wrapping
+        pdf.rect(0, 0, 210, 50, 'F')
+        
+        pdf.set_y(10)
+        pdf.set_font('Arial', 'B', 24)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 10, data.get('personal', {}).get('fullName', 'Your Name'), 0, 1, 'C')
+        
         pdf.set_font('Arial', '', 10)
-        pdf.set_text_color(50, 50, 50)
-        pdf.multi_cell(0, 5, data['summary'])
+        contact_info = []
+        p = data.get('personal', {})
+        if p.get('email'): contact_info.append(p['email'])
+        if p.get('phone'): contact_info.append(p['phone'])
+        if p.get('location'): contact_info.append(p['location'])
+        
+        # Use multi_cell for contact info to prevent truncation
+        pdf.set_x(10) # Ensure we start from left margin
+        pdf.multi_cell(190, 6, ' | '.join(contact_info), align='C')
+        
+        links = []
+        if p.get('linkedin'): links.append(f"LinkedIn: {p['linkedin']}")
+        if p.get('github'): links.append(f"GitHub: {p['github']}")
+        if p.get('portfolio'): links.append(f"Portfolio: {p['portfolio']}")
+        
+        if links:
+            pdf.set_font('Arial', '', 9) # Slightly smaller font for links
+            # Use multi_cell to wrap long lines of links
+            pdf.set_x(10) # Ensure we start from left margin
+            pdf.multi_cell(190, 6, ' | '.join(links), align='C')
 
-    # Skills
-    if data.get('skills'):
-        pdf.section_title('Skills')
-        for skill in data['skills']:
-            if skill.get('category') and skill.get('items'):
+        # Reset Y to ensure content starts after the header background
+        pdf.set_y(55)
+
+        # Summary
+        if data.get('summary'):
+            pdf.section_title('Professional Summary')
+            pdf.set_font('Arial', '', 10)
+            pdf.set_text_color(50, 50, 50)
+            pdf.multi_cell(0, 5, data['summary'])
+
+        # Skills
+        if data.get('skills'):
+            pdf.section_title('Skills')
+            for skill in data['skills']:
+                if skill.get('category') and skill.get('items'):
+                    pdf.set_font('Arial', 'B', 10)
+                    pdf.set_text_color(*secondary_color)
+                    pdf.write(5, f"{skill['category']}: ")
+                    pdf.set_font('Arial', '', 10)
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.write(5, skill['items'])
+                    pdf.ln(6)
+
+        # Experience
+        if data.get('experience'):
+            pdf.section_title('Experience')
+            for exp in data['experience']:
+                pdf.set_font('Arial', 'B', 11)
+                pdf.set_text_color(*primary_color)
+                pdf.cell(130, 6, exp.get('title', ''), 0, 0)
+                pdf.set_font('Arial', 'I', 10)
+                pdf.set_text_color(100, 100, 100)
+                pdf.cell(0, 6, f"{exp.get('startDate', '')} - {exp.get('endDate', '')}", 0, 1, 'R')
+                
                 pdf.set_font('Arial', 'B', 10)
                 pdf.set_text_color(*secondary_color)
-                pdf.write(5, f"{skill['category']}: ")
-                pdf.set_font('Arial', '', 10)
-                pdf.set_text_color(0, 0, 0)
-                pdf.write(5, skill['items'])
-                pdf.ln(6)
+                pdf.cell(0, 5, f"{exp.get('company', '')} | {exp.get('location', '')}", 0, 1)
+                
+                if exp.get('description'):
+                    pdf.set_font('Arial', '', 10)
+                    pdf.set_text_color(50, 50, 50)
+                    pdf.multi_cell(0, 5, exp['description'])
+                pdf.ln(3)
 
-    # Experience
-    if data.get('experience'):
-        pdf.section_title('Experience')
-        for exp in data['experience']:
-            pdf.set_font('Arial', 'B', 11)
-            pdf.set_text_color(*primary_color)
-            pdf.cell(130, 6, exp.get('title', ''), 0, 0)
-            pdf.set_font('Arial', 'I', 10)
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(0, 6, f"{exp.get('startDate', '')} - {exp.get('endDate', '')}", 0, 1, 'R')
-            
-            pdf.set_font('Arial', 'B', 10)
-            pdf.set_text_color(*secondary_color)
-            pdf.cell(0, 5, f"{exp.get('company', '')} | {exp.get('location', '')}", 0, 1)
-            
-            if exp.get('description'):
+        # Education
+        if data.get('education'):
+            pdf.section_title('Education')
+            for edu in data['education']:
+                pdf.set_font('Arial', 'B', 11)
+                pdf.set_text_color(*primary_color)
+                pdf.cell(140, 6, edu.get('degree', ''), 0, 0)
+                pdf.set_font('Arial', 'I', 10)
+                pdf.set_text_color(100, 100, 100)
+                pdf.cell(0, 6, edu.get('year', ''), 0, 1, 'R')
+                
                 pdf.set_font('Arial', '', 10)
-                pdf.set_text_color(50, 50, 50)
-                pdf.multi_cell(0, 5, exp['description'])
-            pdf.ln(3)
+                pdf.set_text_color(*secondary_color)
+                pdf.cell(0, 5, edu.get('university', ''), 0, 1)
+                if edu.get('cgpa'):
+                    pdf.set_font('Arial', 'I', 9)
+                    pdf.cell(0, 5, f"CGPA/GPA: {edu['cgpa']}", 0, 1)
+                pdf.ln(2)
 
-    # Education
-    if data.get('education'):
-        pdf.section_title('Education')
-        for edu in data['education']:
-            pdf.set_font('Arial', 'B', 11)
-            pdf.set_text_color(*primary_color)
-            pdf.cell(140, 6, edu.get('degree', ''), 0, 0)
-            pdf.set_font('Arial', 'I', 10)
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(0, 6, edu.get('year', ''), 0, 1, 'R')
-            
-            pdf.set_font('Arial', '', 10)
-            pdf.set_text_color(*secondary_color)
-            pdf.cell(0, 5, edu.get('university', ''), 0, 1)
-            if edu.get('cgpa'):
+        # Projects
+        if data.get('projects'):
+            pdf.section_title('Projects')
+            for proj in data['projects']:
+                pdf.set_font('Arial', 'B', 11)
+                pdf.set_text_color(*primary_color)
+                pdf.cell(0, 6, proj.get('title', ''), 0, 1)
+                
+                if proj.get('techStack'):
+                    pdf.set_font('Arial', 'I', 9)
+                    pdf.set_text_color(*accent_color)
+                    pdf.cell(0, 5, f"Tech Stack: {proj['techStack']}", 0, 1)
+                
+                if proj.get('description'):
+                    pdf.set_font('Arial', '', 10)
+                    pdf.set_text_color(50, 50, 50)
+                    pdf.multi_cell(0, 5, proj['description'])
+                pdf.ln(3)
+
+        # Certifications
+        if data.get('certifications'):
+            pdf.section_title('Certifications')
+            for cert in data['certifications']:
+                pdf.set_font('Arial', 'B', 10)
+                pdf.set_text_color(*primary_color)
+                pdf.cell(140, 5, cert.get('name', ''), 0, 0)
                 pdf.set_font('Arial', 'I', 9)
-                pdf.cell(0, 5, f"CGPA/GPA: {edu['cgpa']}", 0, 1)
-            pdf.ln(2)
+                pdf.set_text_color(100, 100, 100)
+                pdf.cell(0, 5, cert.get('date', ''), 0, 1, 'R')
+                
+                pdf.set_font('Arial', '', 9)
+                pdf.set_text_color(*secondary_color)
+                pdf.cell(0, 5, cert.get('organization', ''), 0, 1)
+                pdf.ln(2)
 
-    # Projects
-    if data.get('projects'):
-        pdf.section_title('Projects')
-        for proj in data['projects']:
-            pdf.set_font('Arial', 'B', 11)
-            pdf.set_text_color(*primary_color)
-            pdf.cell(0, 6, proj.get('title', ''), 0, 1)
-            
-            if proj.get('techStack'):
-                pdf.set_font('Arial', 'I', 9)
-                pdf.set_text_color(*accent_color)
-                pdf.cell(0, 5, f"Tech Stack: {proj['techStack']}", 0, 1)
-            
-            if proj.get('description'):
-                pdf.set_font('Arial', '', 10)
-                pdf.set_text_color(50, 50, 50)
-                pdf.multi_cell(0, 5, proj['description'])
-            pdf.ln(3)
+        # Output PDF
+        try:
+            # Try fpdf2 style first (returns bytearray)
+            pdf_content = pdf.output()
+            if isinstance(pdf_content, str):
+                # Fallback for older fpdf (returns string)
+                pdf_content = pdf_content.encode('latin-1')
+            elif isinstance(pdf_content, bytearray):
+                pdf_content = bytes(pdf_content)
+        except TypeError:
+            # Fallback if arguments are required (older versions)
+            pdf_content = pdf.output(dest='S').encode('latin-1')
 
-    # Certifications
-    if data.get('certifications'):
-        pdf.section_title('Certifications')
-        for cert in data['certifications']:
-            pdf.set_font('Arial', 'B', 10)
-            pdf.set_text_color(*primary_color)
-            pdf.cell(140, 5, cert.get('name', ''), 0, 0)
-            pdf.set_font('Arial', 'I', 9)
-            pdf.set_text_color(100, 100, 100)
-            pdf.cell(0, 5, cert.get('date', ''), 0, 1, 'R')
-            
-            pdf.set_font('Arial', '', 9)
-            pdf.set_text_color(*secondary_color)
-            pdf.cell(0, 5, cert.get('organization', ''), 0, 1)
-            pdf.ln(2)
+        response = make_response(bytes(pdf_content))
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = 'attachment; filename=resume.pdf'
+        return response
 
-    # Output PDF
-    try:
-        # Try fpdf2 style first (returns bytearray)
-        pdf_content = pdf.output()
-        if isinstance(pdf_content, str):
-            # Fallback for older fpdf (returns string)
-            pdf_content = pdf_content.encode('latin-1')
-    except TypeError:
-        # Fallback if arguments are required (older versions)
-        pdf_content = pdf.output(dest='S').encode('latin-1')
-
-    response = make_response(bytes(pdf_content))
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = 'attachment; filename=resume.pdf'
-    return response
+    except Exception as e:
+        print(f"PDF Generation Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/preview', methods=['POST'])
 @login_required
