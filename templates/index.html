@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
         // Inject server-side data into a global variable
-        window.serverResumeData = {{ resume_data | tojson | safe }};
+        window.serverResumeData = {{ resume_data | tojson | safe }};//no probs
         window.currentUserEmail = "{{ session.get('email', '') }}";
     </script>
 </head>
