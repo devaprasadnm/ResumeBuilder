@@ -3,9 +3,4 @@ fpdf2
 supabase
 python-dotenv
 google-generativeai
-PyFlask
-fpdf2
-supabase
-python-dotenv
-google-generativeai
-Py
+PyPDF2
