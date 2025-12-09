@@ -416,9 +416,9 @@ body {
 /* Action Buttons */
 .action-buttons {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 1rem;
-    margin-top: 3rem;
+    margin: 3rem;
     align-items: center;
 }
 

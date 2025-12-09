@@ -39,9 +39,9 @@
         <main class="main-content">
             <!-- Control Buttons -->
             <div class="control-buttons">
-                <button type="button" class="btn btn-secondary" onclick="autofillFromPDF()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                    Auto-Fill Sample
+                <button type="button" class="btn btn-secondary" onclick="fetchExistingResume()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Fetch Existing Resume
                 </button>
                 <label class="btn btn-secondary" style="margin: 0; cursor: pointer;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -53,6 +53,55 @@
                     Clear
                 </button>
             </div>
+
+            <!-- Job Description Matcher Section -->
+            <section class="form-section" style="border: 2px solid #4f46e5; background-color: #f5f3ff;">
+                <h2 class="section-title" style="color: #4f46e5;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    AI Job Description Matcher
+                </h2>
+                <p style="margin-bottom: 1rem; color: #666;">Paste a Job Description or upload a PDF to get tailored suggestions for your resume.</p>
+                
+                <div class="form-group">
+                    <textarea id="jdText" class="form-input" rows="4" placeholder="Paste Job Description here..."></textarea>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                    <label class="btn btn-secondary" style="margin: 0; cursor: pointer;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Upload JD PDF
+                        <input type="file" id="jdPdfUpload" accept=".pdf" style="display: none;" onchange="handleJDUpload(event)">
+                    </label>
+                    <span id="jdFileName" style="color: #666; font-size: 0.9rem;"></span>
+                </div>
+
+                <button type="button" class="btn btn-primary" onclick="analyzeJD()" id="analyzeBtn">
+                    Analyze & Suggest
+                </button>
+
+                <!-- Results Panel (Hidden by default) -->
+                <div id="jdResults" style="display: none; margin-top: 1.5rem; border-top: 1px solid #e5e7eb; padding-top: 1.5rem;">
+                    <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;">Suggestions</h3>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Suggested Professional Summary</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <textarea id="suggestedSummary" class="form-input" rows="3" readonly></textarea>
+                            <button type="button" class="btn btn-secondary" onclick="applySummary()" title="Use this summary">Use</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Key Skills Found</label>
+                        <div id="suggestedSkills" style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Required Experience</label>
+                        <input type="text" id="suggestedExperience" class="form-input" readonly>
+                    </div>
+                </div>
+            </section>
 
             <form id="resumeForm">
                 <!-- Personal Information Section -->
@@ -123,7 +172,9 @@
                                 <input type="text" class="form-input skill-items" placeholder="Skills (comma-separated)">
                             </div>
                             <div class="button-container">
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeSkill(this)"> Remove</button>
+                                <button type="button" class="btn-remove" onclick="removeSkill(this)" title="Remove">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -149,7 +200,9 @@
                             </div>
                             <textarea class="form-textarea exp-description" placeholder="Responsibilities & Achievements (one per line)" rows="3"></textarea>
                             <div class="button-container">
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeExperience(this)"> Remove</button>
+                                <button type="button" class="btn-remove" onclick="removeExperience(this)" title="Remove">
+                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -173,7 +226,9 @@
                                 <input type="text" class="form-input edu-cgpa" placeholder="CGPA/GPA">
                             </div>
                             <div class="button-container">
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeEducation(this)"> Remove</button>
+                                <button type="button" class="btn-remove" onclick="removeEducation(this)" title="Remove">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -192,7 +247,9 @@
                             <textarea placeholder="Project Description" class="form-textarea proj-description" rows="3"></textarea>
                             <input type="text" placeholder="Tech Stack (comma-separated)" class="form-input proj-tech">
                             <div class="button-container">
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeProject(this)"> Remove</button>
+                                <button type="button" class="btn-remove" onclick="removeProject(this)" title="Remove">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -213,7 +270,9 @@
                             </div>
                             <input type="text" placeholder="Date" class="form-input cert-date">
                             <div class="button-container">
-                                <button type="button" class="btn btn-danger btn-sm" onclick="removeCertification(this)"> Remove</button>
+                                <button type="button" class="btn-remove" onclick="removeCertification(this)" title="Remove">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
                             </div>
                         </div>
                     </div>

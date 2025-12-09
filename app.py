@@ -5,6 +5,7 @@ from functools import wraps
 from fpdf import FPDF
 from supabase import create_client, Client, ClientOptions
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 load_dotenv()
 
@@ -20,6 +21,10 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 # Supabase Setup
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 if SUPABASE_URL and SUPABASE_KEY:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -311,6 +316,24 @@ class PDF(FPDF):
 def generate_pdf():
     try:
         data = request.json
+        
+        # Save data to database before generating PDF
+        user_id = session.get('user')
+        db = get_supabase()
+        if db and user_id:
+            try:
+                # Check if record exists
+                existing = db.table('resumes').select('id').eq('user_id', user_id).execute()
+                
+                if existing.data and len(existing.data) > 0:
+                    # Update
+                    db.table('resumes').update({'data': data, 'updated_at': 'now()'}).eq('user_id', user_id).execute()
+                else:
+                    # Insert
+                    db.table('resumes').insert({'user_id': user_id, 'data': data}).execute()
+            except Exception as e:
+                print(f"Error saving resume during generation: {e}")
+
         # Sanitize data to prevent UnicodeEncodeError
         data = recursive_sanitize(data)
         
@@ -485,6 +508,60 @@ def preview():
 @login_required
 def resume():
     return render_template('resume.html')
+
+@app.route('/analyze-jd', methods=['POST'])
+@login_required
+def analyze_jd():
+    if not GEMINI_API_KEY:
+        return jsonify({'error': 'Gemini API key not configured'}), 500
+
+    jd_text = request.form.get('jd_text')
+    jd_file = request.files.get('jd_file')
+
+    text_to_analyze = ""
+
+    if jd_file and jd_file.filename.lower().endswith('.pdf'):
+        if PdfReader is None:
+            return jsonify({'error': 'PDF processing not available. Install PyPDF2.'}), 500
+        try:
+            pdf_reader = PdfReader(jd_file)
+            for page in pdf_reader.pages:
+                text_to_analyze += page.extract_text() + '\n'
+        except Exception as e:
+            return jsonify({'error': f'Error reading PDF: {str(e)}'}), 500
+    elif jd_text:
+        text_to_analyze = jd_text
+    else:
+        return jsonify({'error': 'No Job Description provided'}), 400
+
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        prompt = f"""
+        Analyze the following Job Description and extract the following information in JSON format:
+        1. "summary": A professional summary tailored to this job description (max 3-4 sentences).
+        2. "skills": A list of key technical and soft skills mentioned or required.
+        3. "experience": The years of experience required (e.g., "3+ years", "5-7 years").
+
+        Job Description:
+        {text_to_analyze[:10000]} 
+        """
+
+        response = model.generate_content(prompt)
+        
+        response_text = response.text.strip()
+        # Clean up markdown code blocks if present
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+            
+        return jsonify(json.loads(response_text))
+
+    except Exception as e:
+        return jsonify({'error': f'Gemini Error: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

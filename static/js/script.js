@@ -30,35 +30,74 @@ function showToast(message, type = 'info') {
 // ============================================
 // Auto-Fill and Clear Functions
 // ============================================
-async function autofillFromPDF() {
+async function fetchExistingResume() {
     try {
+        console.log('Fetching resume data...');
         const response = await fetch('/api/resume-data');
-        const data = await response.json();
+        let data = await response.json();
+        console.log('Received data:', data);
+        
+        // Handle double-encoded JSON if necessary
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+                console.log('Parsed string data:', data);
+            } catch (e) {
+                console.error('Failed to parse data string', e);
+            }
+        }
+
+        // Handle wrapped data (e.g. { content: { ... } })
+        if (data.content && typeof data.content === 'object') {
+            console.log('Unwrapping data content');
+            data = data.content;
+        }
         
         // Check if we have meaningful data from the API
         if (data && Object.keys(data).length > 0) {
-            if (data.personal) {
-                // Data is in the full saved format
-                populateFormData(data);
-                showToast('✅ Resume data loaded from cloud!', 'success');
-                saveFormData(); // Sync to local storage
-            } else if (data.name && data.name !== 'N/A') {
-                // Data is in the flat extracted format
-                document.getElementById('fullName').value = data.name || '';
-                document.getElementById('email').value = data.email || '';
-                document.getElementById('phone').value = data.phone || '';
-                document.getElementById('location').value = data.location || '';
-                document.getElementById('linkedin').value = data.linkedin || '';
-                document.getElementById('github').value = data.github || '';
-                document.getElementById('portfolio').value = data.portfolio || '';
-                
-                showToast('✅ Resume data loaded! Please complete missing fields.', 'success');
-                saveFormData();
+            let structuredData = data;
+
+            // If data is in flat format (from PDF extraction or old format), convert to structured
+            if (!data.personal && (data.name || data.email)) {
+                console.log('Converting flat data to structured format');
+                structuredData = {
+                    personal: {
+                        fullName: data.name || '',
+                        email: data.email || '',
+                        phone: data.phone || '',
+                        location: data.location || '',
+                        linkedin: data.linkedin || '',
+                        github: data.github || '',
+                        portfolio: data.portfolio || ''
+                    },
+                    summary: data.summary || '',
+                    skills: Array.isArray(data.skills) ? data.skills : [],
+                    experience: Array.isArray(data.experience) ? data.experience : [],
+                    education: Array.isArray(data.education) ? data.education : [],
+                    projects: Array.isArray(data.projects) ? data.projects : [],
+                    certifications: Array.isArray(data.certifications) ? data.certifications : []
+                };
             }
+
+            console.log('Populating form with:', structuredData);
+            populateFormData(structuredData);
+            
+            // Verify if data was populated
+            const nameVal = document.getElementById('fullName').value;
+            if (nameVal) {
+                showToast(`✅ Resume data loaded! (Name: ${nameVal})`, 'success');
+            } else {
+                showToast('⚠️ Data loaded but name is empty.', 'warning');
+            }
+            
+            saveFormData(); // Sync to local storage
+        } else {
+            console.log('No data found');
+            showToast('ℹ️ No saved resume found.', 'info');
         }
     } catch (error) {
         console.error('Error loading resume data:', error);
-        showToast('Error loading resume data', 'error');
+        showToast('Error loading resume data: ' + error.message, 'error');
     }
 }
 
@@ -208,7 +247,9 @@ function addSkill() {
         <input type="text" placeholder="Skill Category (e.g., Languages)" class="form-input skill-category">
         <input type="text" placeholder="Skills (comma-separated)" class="form-input skill-items">
         <div class="button-container">
-            <button type="button" class="remove-btn" onclick="removeSkill(this)">✕ Remove</button>
+            <button type="button" class="btn-remove" onclick="removeSkill(this)" title="Remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
         </div>
     `;
     container.appendChild(skillItem);
@@ -244,7 +285,9 @@ function addExperience() {
         </div>
         <textarea placeholder="Responsibilities & Achievements (one per line)" class="form-textarea exp-description" rows="3"></textarea>
         <div class="button-container">
-            <button type="button" class="remove-btn" onclick="removeExperience(this)">✕ Remove</button>
+            <button type="button" class="btn-remove" onclick="removeExperience(this)" title="Remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
         </div>
     `;
     container.appendChild(expItem);
@@ -278,7 +321,9 @@ function addEducation() {
             <input type="text" placeholder="CGPA/GPA" class="form-input edu-cgpa">
         </div>
         <div class="button-container">
-            <button type="button" class="remove-btn" onclick="removeEducation(this)">✕ Remove</button>
+            <button type="button" class="btn-remove" onclick="removeEducation(this)" title="Remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
         </div>
     `;
     container.appendChild(eduItem);
@@ -308,7 +353,9 @@ function addProject() {
         <textarea placeholder="Project Description" class="form-textarea proj-description" rows="3"></textarea>
         <input type="text" placeholder="Tech Stack (comma-separated)" class="form-input proj-tech">
         <div class="button-container">
-            <button type="button" class="remove-btn" onclick="removeProject(this)">✕ Remove</button>
+            <button type="button" class="btn-remove" onclick="removeProject(this)" title="Remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
         </div>
     `;
     container.appendChild(projItem);
@@ -338,7 +385,9 @@ function addCertification() {
         <input type="text" placeholder="Issuing Organization" class="form-input cert-org">
         <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date">
         <div class="button-container">
-            <button type="button" class="remove-btn" onclick="removeCertification(this)">✕ Remove</button>
+            <button type="button" class="btn-remove" onclick="removeCertification(this)" title="Remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
         </div>
     `;
     container.appendChild(certItem);
@@ -814,7 +863,9 @@ function populateFormData(data) {
                 </div>
                 <textarea placeholder="Responsibilities & Achievements (one per line)" class="form-textarea exp-description" rows="3">${escapeHtml(exp.description || '')}</textarea>
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeExperience(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeExperience(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             `;
             expContainer.appendChild(item);
@@ -831,7 +882,9 @@ function populateFormData(data) {
                 </div>
                 <textarea placeholder="Responsibilities & Achievements (one per line)" class="form-textarea exp-description" rows="3"></textarea>
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeExperience(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeExperience(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             </div>
         `;
@@ -852,7 +905,9 @@ function populateFormData(data) {
                     <input type="text" placeholder="CGPA/GPA" class="form-input edu-cgpa" value="${escapeHtml(edu.cgpa || '')}">
                 </div>
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeEducation(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeEducation(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             `;
             eduContainer.appendChild(item);
@@ -867,7 +922,9 @@ function populateFormData(data) {
                     <input type="text" placeholder="CGPA/GPA" class="form-input edu-cgpa">
                 </div>
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeEducation(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeEducation(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             </div>
         `;
@@ -885,7 +942,9 @@ function populateFormData(data) {
                 <textarea placeholder="Project Description" class="form-textarea proj-description" rows="3">${escapeHtml(proj.description || '')}</textarea>
                 <input type="text" placeholder="Tech Stack (comma-separated)" class="form-input proj-tech" value="${escapeHtml(proj.techStack || '')}">
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeProject(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeProject(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             `;
             projContainer.appendChild(item);
@@ -897,7 +956,9 @@ function populateFormData(data) {
                 <textarea placeholder="Project Description" class="form-textarea proj-description" rows="3"></textarea>
                 <input type="text" placeholder="Tech Stack (comma-separated)" class="form-input proj-tech">
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeProject(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeProject(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             </div>
         `;
@@ -915,7 +976,9 @@ function populateFormData(data) {
                 <input type="text" placeholder="Issuing Organization" class="form-input cert-org" value="${escapeHtml(cert.organization || '')}">
                 <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date" value="${escapeHtml(cert.date || '')}">
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeCertification(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeCertification(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             `;
             certContainer.appendChild(item);
@@ -927,7 +990,9 @@ function populateFormData(data) {
                 <input type="text" placeholder="Issuing Organization" class="form-input cert-org">
                 <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date">
                 <div class="button-container">
-                    <button type="button" class="remove-btn" onclick="removeCertification(this)">✕ Remove</button>
+                    <button type="button" class="btn-remove" onclick="removeCertification(this)" title="Remove">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                 </div>
             </div>
         `;
@@ -942,3 +1007,118 @@ setInterval(saveFormData, 10000); // Every 10 seconds
 
 // Save on form input
 document.getElementById('resumeForm').addEventListener('input', saveFormData);
+
+// ============================================
+// Job Description Analysis
+// ============================================
+
+function handleJDUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        document.getElementById('jdFileName').textContent = file.name;
+    }
+}
+
+async function analyzeJD() {
+    const jdText = document.getElementById('jdText').value;
+    const jdFile = document.getElementById('jdPdfUpload').files[0];
+    const analyzeBtn = document.getElementById('analyzeBtn');
+
+    if (!jdText && !jdFile) {
+        showToast(' Please provide a Job Description (Text or PDF).', 'warning');
+        return;
+    }
+
+    analyzeBtn.disabled = true;
+    analyzeBtn.textContent = 'Analyzing...';
+
+    const formData = new FormData();
+    if (jdText) formData.append('jd_text', jdText);
+    if (jdFile) formData.append('jd_file', jdFile);
+
+    try {
+        const response = await fetch('/analyze-jd', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Analysis failed');
+        }
+
+        displayJDSuggestions(data);
+        showToast(' Analysis complete!', 'success');
+
+    } catch (error) {
+        console.error('Error analyzing JD:', error);
+        showToast(' Error: ' + error.message, 'error');
+    } finally {
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = 'Analyze & Suggest';
+    }
+}
+
+function displayJDSuggestions(data) {
+    const resultsDiv = document.getElementById('jdResults');
+    resultsDiv.style.display = 'block';
+
+    // Summary
+    document.getElementById('suggestedSummary').value = data.summary || 'No summary generated.';
+
+    // Experience
+    document.getElementById('suggestedExperience').value = data.experience || 'Not specified.';
+
+    // Skills
+    const skillsContainer = document.getElementById('suggestedSkills');
+    skillsContainer.innerHTML = '';
+    if (data.skills && Array.isArray(data.skills)) {
+        data.skills.forEach(skill => {
+            const badge = document.createElement('span');
+            badge.className = 'skill-badge';
+            badge.style.cssText = 'background: #e0e7ff; color: #4f46e5; padding: 4px 8px; border-radius: 4px; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 4px; margin-right: 5px; margin-bottom: 5px;';
+            badge.innerHTML = `
+                ${skill}
+                <button onclick="appendSuggestedSkill('${skill.replace(/'/g, "\\'")}')" style="border: none; background: none; cursor: pointer; color: #4f46e5; font-weight: bold;" title="Add to Skills">+</button>
+            `;
+            skillsContainer.appendChild(badge);
+        });
+    }
+}
+
+function applySummary() {
+    const summary = document.getElementById('suggestedSummary').value;
+    if (summary) {
+        document.getElementById('summary').value = summary;
+        showToast('Summary updated!', 'success');
+        saveFormData();
+    }
+}
+
+function appendSuggestedSkill(skill) {
+    // Try to find the first skill input field
+    const skillsInput = document.querySelector('.skill-items');
+    
+    if (!skillsInput) {
+        showToast('Please add a skill section first.', 'warning');
+        return;
+    }
+
+    const currentSkills = skillsInput.value;
+    
+    // Simple duplicate check
+    if (currentSkills.toLowerCase().includes(skill.toLowerCase())) {
+        showToast('Skill already exists in the first category!', 'info');
+        return;
+    }
+
+    if (currentSkills) {
+        skillsInput.value = currentSkills + ', ' + skill;
+    } else {
+        skillsInput.value = skill;
+    }
+    showToast('Added "' + skill + '"', 'success');
+    saveFormData();
+}
+
