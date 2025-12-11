@@ -1070,6 +1070,19 @@ function displayJDSuggestions(data) {
     // Experience
     document.getElementById('suggestedExperience').value = data.experience || 'Not specified.';
 
+    // Store job details for cover letter
+    document.getElementById('extractedJobTitle').value = data.job_title || '';
+    document.getElementById('extractedCompanyName').value = data.company_name || '';
+
+    // Show cover letter section
+    const coverLetterSection = document.getElementById('coverLetterSection');
+    coverLetterSection.style.display = 'block';
+
+    // Pre-fill recruiter email if found
+    if (data.recruiter_email) {
+        document.getElementById('recruiterEmail').value = data.recruiter_email;
+    }
+
     // Skills
     const skillsContainer = document.getElementById('suggestedSkills');
     skillsContainer.innerHTML = '';
@@ -1120,5 +1133,123 @@ function appendSuggestedSkill(skill) {
     }
     showToast('Added "' + skill + '"', 'success');
     saveFormData();
+}
+
+// ============================================
+// Cover Letter Generation
+// ============================================
+
+async function generateCoverLetter() {
+    const btn = document.getElementById('generateCoverLetterBtn');
+    const originalText = btn.textContent;
+    
+    // Collect user data from form
+    const userName = document.getElementById('fullName').value;
+    const userEmail = document.getElementById('email').value;
+    const userPhone = document.getElementById('phone').value;
+    const userSummary = document.getElementById('summary').value;
+    
+    // Collect skills
+    let userSkills = [];
+    document.querySelectorAll('#skillsContainer .entry-item').forEach(item => {
+        const items = item.querySelector('.skill-items')?.value;
+        if (items) userSkills.push(items);
+    });
+    
+    // Collect experience highlights
+    let userExperience = [];
+    document.querySelectorAll('#experienceContainer .entry-item').forEach(item => {
+        const title = item.querySelector('.exp-title')?.value;
+        const company = item.querySelector('.exp-company')?.value;
+        if (title && company) userExperience.push(`${title} at ${company}`);
+    });
+
+    // Get job details from JD analysis
+    const jobTitle = document.getElementById('extractedJobTitle').value || 'the position';
+    const companyName = document.getElementById('extractedCompanyName').value || 'your company';
+    const jdSummary = document.getElementById('suggestedSummary').value;
+
+    if (!userName) {
+        showToast('Please fill in your name in Personal Information first.', 'warning');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+
+    try {
+        const response = await fetch('/generate-cover-letter', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                job_title: jobTitle,
+                company_name: companyName,
+                jd_summary: jdSummary,
+                user_name: userName,
+                user_email: userEmail,
+                user_phone: userPhone,
+                user_skills: userSkills.join(', '),
+                user_experience: userExperience.join('; '),
+                user_summary: userSummary
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to generate cover letter');
+        }
+
+        // Display the cover letter
+        document.getElementById('emailSubject').value = data.subject;
+        document.getElementById('coverLetterText').value = data.cover_letter;
+        document.getElementById('coverLetterContent').style.display = 'block';
+        
+        showToast('Cover letter generated!', 'success');
+
+    } catch (error) {
+        console.error('Error generating cover letter:', error);
+        showToast('Error: ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    }
+}
+
+function openMailto() {
+    const recruiterEmail = document.getElementById('recruiterEmail').value;
+    const subject = document.getElementById('emailSubject').value;
+    const body = document.getElementById('coverLetterText').value;
+
+    if (!recruiterEmail) {
+        showToast('Please enter the recruiter email address.', 'warning');
+        return;
+    }
+
+    // Create mailto link
+    const mailtoLink = `mailto:${encodeURIComponent(recruiterEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
+    // Open in new window/tab (will trigger email client)
+    window.location.href = mailtoLink;
+    
+    showToast('Opening email client...', 'info');
+}
+
+function copyCoverLetter() {
+    const coverLetter = document.getElementById('coverLetterText').value;
+    
+    if (!coverLetter) {
+        showToast('No cover letter to copy.', 'warning');
+        return;
+    }
+
+    navigator.clipboard.writeText(coverLetter).then(() => {
+        showToast('Cover letter copied to clipboard!', 'success');
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showToast('Failed to copy. Please select and copy manually.', 'error');
+    });
 }
 

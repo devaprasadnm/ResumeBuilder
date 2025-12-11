@@ -542,6 +542,9 @@ def analyze_jd():
         1. "summary": You are an expert resume strategist and career writer. Your task is to generate a concise, ATS-friendly professional summary tailored to the Job Description (JD) provided.
         2. "skills": A list of key technical and soft skills mentioned or required.
         3. "experience": The years of experience required (e.g., "3+ years", "5-7 years").
+        4. "recruiter_email": Extract any recruiter or HR email address mentioned in the JD. If none found, return null.
+        5. "company_name": The name of the company hiring.
+        6. "job_title": The job title/position being advertised.
 
         Job Description:
         {text_to_analyze[:10000]} 
@@ -562,6 +565,69 @@ def analyze_jd():
 
     except Exception as e:
         return jsonify({'error': f'Gemini Error: {str(e)}'}), 500
+
+
+@app.route('/generate-cover-letter', methods=['POST'])
+@login_required
+def generate_cover_letter():
+    if not GEMINI_API_KEY:
+        return jsonify({'error': 'Gemini API key not configured'}), 500
+
+    data = request.json
+    job_title = data.get('job_title', 'the position')
+    company_name = data.get('company_name', 'your company')
+    jd_summary = data.get('jd_summary', '')
+    user_name = data.get('user_name', '')
+    user_email = data.get('user_email', '')
+    user_phone = data.get('user_phone', '')
+    user_skills = data.get('user_skills', '')
+    user_experience = data.get('user_experience', '')
+    user_summary = data.get('user_summary', '')
+
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        prompt = f"""
+        You are a professional career coach and cover letter expert. Write a compelling, personalized cover letter for a job application.
+
+        Job Details:
+        - Position: {job_title}
+        - Company: {company_name}
+        - Job Requirements Summary: {jd_summary}
+
+        Candidate Details:
+        - Name: {user_name}
+        - Email: {user_email}
+        - Phone: {user_phone}
+        - Key Skills: {user_skills}
+        - Professional Summary: {user_summary}
+        - Experience Highlights: {user_experience}
+
+        Requirements:
+        1. Write a professional, engaging cover letter (3-4 paragraphs)
+        2. Highlight how the candidate's skills match the job requirements
+        3. Show enthusiasm for the role and company
+        4. Keep it concise but impactful
+        5. Do NOT include placeholders like [Your Name] - use the actual provided details
+        6. End with a professional closing
+
+        Return ONLY the cover letter text, no additional formatting or explanations.
+        """
+
+        response = model.generate_content(prompt)
+        cover_letter = response.text.strip()
+        
+        # Generate email subject
+        subject = f"Application for {job_title} Position - {user_name}"
+        
+        return jsonify({
+            'cover_letter': cover_letter,
+            'subject': subject
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Error generating cover letter: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
