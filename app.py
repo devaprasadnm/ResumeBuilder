@@ -539,7 +539,7 @@ def analyze_jd():
         
         prompt = f"""
         Analyze the following Job Description and extract the following information in JSON format:
-        1. "summary": A professional summary tailored to this job description (max 3-4 sentences).
+        1. "summary": You are an expert resume strategist and career writer. Your task is to generate a concise, ATS-friendly professional summary tailored to the Job Description (JD) provided.
         2. "skills": A list of key technical and soft skills mentioned or required.
         3. "experience": The years of experience required (e.g., "3+ years", "5-7 years").
 
