@@ -383,7 +383,10 @@ function addCertification() {
     certItem.innerHTML = `
         <input type="text" placeholder="Certification/Workshop Name" class="form-input cert-name">
         <input type="text" placeholder="Issuing Organization" class="form-input cert-org">
-        <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date">
+        <div class="form-grid-2">
+            <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date">
+            <input type="url" placeholder="Certification Link (optional)" class="form-input cert-link">
+        </div>
         <div class="button-container">
             <button type="button" class="btn-remove" onclick="removeCertification(this)" title="Remove">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -478,9 +481,10 @@ function collectFormData() {
     // Collect certifications
     document.querySelectorAll('#certificationsContainer .entry-item').forEach(item => {
         const cert = {
-            name: item.querySelector('.cert-name').value,
-            organization: item.querySelector('.cert-org').value,
-            date: item.querySelector('.cert-date').value
+            name: item.querySelector('.cert-name')?.value || '',
+            organization: item.querySelector('.cert-org')?.value || '',
+            date: item.querySelector('.cert-date')?.value || '',
+            link: item.querySelector('.cert-link')?.value || ''
         };
         if (cert.name) {
             data.certifications.push(cert);
@@ -628,9 +632,10 @@ function renderResumeTemplate(data) {
     if (certifications && certifications.length > 0) {
         html += sectionTitle('Certifications');
         certifications.forEach(cert => {
+            const certNameDisplay = cert.link ? `<a href="${cert.link}" style="color: ${colors.primary}; text-decoration: underline; cursor: pointer;">${escapeHtml(cert.name)}</a>` : `<span style="color: ${colors.primary};">${escapeHtml(cert.name)}</span>`;
             html += `<div style="margin-bottom: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                    <div style="font-size: 14px; font-weight: bold; color: ${colors.primary};">${escapeHtml(cert.name)}</div>
+                    <div style="font-size: 14px; font-weight: bold;">${certNameDisplay}</div>
                     <div style="font-size: 13px; font-style: italic; color: ${colors.lightText};">${escapeHtml(cert.date)}</div>
                 </div>
                 <div style="font-size: 13px; color: ${colors.secondary};">${escapeHtml(cert.organization)}</div>
@@ -972,9 +977,14 @@ function populateFormData(data) {
             const item = document.createElement('div');
             item.className = 'entry-item';
             item.innerHTML = `
-                <input type="text" placeholder="Certification/Workshop Name" class="form-input cert-name" value="${escapeHtml(cert.name || '')}">
-                <input type="text" placeholder="Issuing Organization" class="form-input cert-org" value="${escapeHtml(cert.organization || '')}">
-                <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date" value="${escapeHtml(cert.date || '')}">
+                <div class="form-grid-2">
+                    <input type="text" placeholder="Certification/Workshop Name" class="form-input cert-name" value="${escapeHtml(cert.name || '')}">
+                    <input type="text" placeholder="Issuing Organization" class="form-input cert-org" value="${escapeHtml(cert.organization || '')}">
+                </div>
+                <div class="form-grid-2">
+                    <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date" value="${escapeHtml(cert.date || '')}">
+                    <input type="url" placeholder="Certification Link (optional)" class="form-input cert-link" value="${escapeHtml(cert.link || '')}">
+                </div>
                 <div class="button-container">
                     <button type="button" class="btn-remove" onclick="removeCertification(this)" title="Remove">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -986,9 +996,14 @@ function populateFormData(data) {
     } else {
         certContainer.innerHTML = `
             <div class="entry-item">
-                <input type="text" placeholder="Certification/Workshop Name" class="form-input cert-name">
-                <input type="text" placeholder="Issuing Organization" class="form-input cert-org">
-                <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date">
+                <div class="form-grid-2">
+                    <input type="text" placeholder="Certification/Workshop Name" class="form-input cert-name">
+                    <input type="text" placeholder="Issuing Organization" class="form-input cert-org">
+                </div>
+                <div class="form-grid-2">
+                    <input type="text" placeholder="Date (e.g., Jan 2023)" class="form-input cert-date">
+                    <input type="url" placeholder="Certification Link (optional)" class="form-input cert-link">
+                </div>
                 <div class="button-container">
                     <button type="button" class="btn-remove" onclick="removeCertification(this)" title="Remove">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>

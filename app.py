@@ -466,7 +466,18 @@ def generate_pdf():
             for cert in data['certifications']:
                 pdf.set_font('Arial', 'B', 10)
                 pdf.set_text_color(*primary_color)
-                pdf.cell(140, 5, cert.get('name', ''), 0, 0)
+                
+                # Add clickable link if URL is provided
+                cert_name = cert.get('name', '')
+                cert_link = cert.get('link', '').strip()
+                
+                if cert_link and (cert_link.startswith('http://') or cert_link.startswith('https://')):
+                    # Add as clickable link
+                    pdf.cell(140, 5, cert_name, 0, 0, link=cert_link)
+                else:
+                    # Add as regular text
+                    pdf.cell(140, 5, cert_name, 0, 0)
+                
                 pdf.set_font('Arial', 'I', 9)
                 pdf.set_text_color(100, 100, 100)
                 pdf.cell(0, 5, cert.get('date', ''), 0, 1, 'R')
@@ -627,6 +638,12 @@ def generate_cover_letter():
 
     except Exception as e:
         return jsonify({'error': f'Error generating cover letter: {str(e)}'}), 500
+
+# This is already in your code at `/api/resume-data` endpoint
+def fetch_resume_from_db(user_id):
+    db = get_supabase()
+    response = db.table('resumes').select('data').eq('user_id', user_id).execute()
+    return response.data[0]['data'] if response.data else None
 
 
 if __name__ == '__main__':
